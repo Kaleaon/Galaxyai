@@ -25,10 +25,12 @@ Typical usage::
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from gma.falsification import FalsificationSink, FalsificationState
 from gma.learning import AccretionEngine, DustParcel
+from gma.navigation import HyperlaneNetwork, SpaceLane
+from gma.retrieval import SourceEvidence, WebRetriever, WikipediaRetriever
 from gma.structures import Filament, GalacticCore, Planet, StarSystem
 
 
@@ -54,12 +56,20 @@ class Galaxy:
         )
         self.engine = AccretionEngine(falsification_sink=self.sink)
         self.filaments: Dict[tuple, Filament] = {}
+        self.hyperlanes = HyperlaneNetwork()
+        self.wikipedia = WikipediaRetriever()
+        self.web = WebRetriever()
 
     # ------------------------------------------------------------------
     # Domain management
     # ------------------------------------------------------------------
 
-    def register_domain(self, domain: str, star_mass: float = 1.0) -> StarSystem:
+    def register_domain(
+        self,
+        domain: str,
+        star_mass: float = 1.0,
+        position: Tuple[float, float, float] = (0.0, 0.0, 0.0),
+    ) -> StarSystem:
         """Register a knowledge domain (star system).
 
         If the domain already exists, return the existing system.
@@ -71,7 +81,7 @@ class Galaxy:
         Returns:
             The StarSystem for this domain.
         """
-        return self.engine.register_system(domain, star_mass=star_mass)
+        return self.engine.register_system(domain, star_mass=star_mass, position=position)
 
     def get_domain(self, domain: str) -> Optional[StarSystem]:
         """Return the StarSystem for *domain*, or None if not registered."""
@@ -110,6 +120,31 @@ class Galaxy:
             contradicts=contradicts,
         )
         return self.engine.ingest(dust)
+
+
+    def ingest_evidence(
+        self,
+        evidence: SourceEvidence,
+        domain: Optional[str] = None,
+        contradicts: Optional[str] = None,
+    ) -> Planet:
+        """Ingest evidence-bearing content from an external source."""
+        return self.ingest(
+            content=evidence.content,
+            domain=domain,
+            initial_confidence=evidence.initial_confidence(),
+            contradicts=contradicts,
+        )
+
+    def ingest_from_wikipedia(self, topic: str, domain: Optional[str] = None) -> Planet:
+        """Fetch a Wikipedia summary and ingest it into the galaxy."""
+        evidence = self.wikipedia.fetch_summary(topic)
+        return self.ingest_evidence(evidence, domain=domain)
+
+    def ingest_from_url(self, url: str, domain: Optional[str] = None) -> Planet:
+        """Fetch a website excerpt and ingest it into the galaxy."""
+        evidence = self.web.fetch_text(url)
+        return self.ingest_evidence(evidence, domain=domain)
 
     # ------------------------------------------------------------------
     # Falsification
@@ -211,6 +246,71 @@ class Galaxy:
                 strength=strength,
             )
         return self.filaments[key]
+
+
+    def add_hyperlane(self, domain_a: str, domain_b: str, stability: float = 0.9) -> Optional[SpaceLane]:
+        """Add a long-distance hyperlane between two domains."""
+        sys_a = self.engine.get_system(domain_a)
+        sys_b = self.engine.get_system(domain_b)
+        if sys_a is None or sys_b is None:
+            return None
+        return self.hyperlanes.add_hyperlane(sys_a.system_id, sys_b.system_id, stability=stability)
+
+    def add_wormhole(
+        self,
+        domain_a: str,
+        domain_b: str,
+        stability: float = 0.75,
+        distance_multiplier: float = 0.1,
+    ) -> Optional[SpaceLane]:
+        """Add a wormhole shortcut between far domains."""
+        sys_a = self.engine.get_system(domain_a)
+        sys_b = self.engine.get_system(domain_b)
+        if sys_a is None or sys_b is None:
+            return None
+        return self.hyperlanes.add_wormhole(
+            sys_a.system_id,
+            sys_b.system_id,
+            stability=stability,
+            distance_multiplier=distance_multiplier,
+        )
+
+    def shortest_domain_path(self, domain_a: str, domain_b: str) -> List[str]:
+        """Find the cheapest route between two domains over hyperlanes/wormholes."""
+        sys_a = self.engine.get_system(domain_a)
+        sys_b = self.engine.get_system(domain_b)
+        if sys_a is None or sys_b is None:
+            return []
+
+        positions = {s.system_id: s.position for s in self.engine.systems.values()}
+        path = self.hyperlanes.shortest_path(sys_a.system_id, sys_b.system_id, positions)
+        id_to_domain = {s.system_id: name for name, s in self.engine.systems.items()}
+        return [id_to_domain[system_id] for system_id in path]
+
+    def galaxy_map_3d(self) -> Dict[str, List[dict]]:
+        """Return serializable 3D graph data for renderers (Three.js, Plotly, etc.)."""
+        systems = [
+            {
+                "domain": name,
+                "system_id": sys.system_id,
+                "position": sys.position,
+                "star_mass": sys.star.mass,
+                "planet_count": len(sys.planets),
+            }
+            for name, sys in self.engine.systems.items()
+        ]
+        lanes = [
+            {
+                "lane_id": lane.lane_id,
+                "from_system": lane.system_a_id,
+                "to_system": lane.system_b_id,
+                "lane_type": lane.lane_type,
+                "stability": lane.stability,
+                "distance_multiplier": lane.distance_multiplier,
+            }
+            for lane in self.hyperlanes.lanes()
+        ]
+        return {"systems": systems, "lanes": lanes}
 
     # ------------------------------------------------------------------
     # Identity / Core
