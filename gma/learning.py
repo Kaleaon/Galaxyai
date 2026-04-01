@@ -19,7 +19,7 @@ The AccretionEngine is responsible for:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Optional, TYPE_CHECKING
+from typing import Dict, Optional, TYPE_CHECKING, Tuple
 
 from gma.structures import Planet, Star, StarSystem
 
@@ -88,14 +88,19 @@ class AccretionEngine:
     # Registration
     # ------------------------------------------------------------------
 
-    def register_system(self, domain: str, star_mass: float = 1.0) -> StarSystem:
+    def register_system(
+        self,
+        domain: str,
+        star_mass: float = 1.0,
+        position: Tuple[float, float, float] = (0.0, 0.0, 0.0),
+    ) -> StarSystem:
         """Create and register a new star system for *domain*.
 
         If a system for *domain* already exists, return it unchanged.
         """
         if domain not in self.systems:
             star = Star(name=domain, mass=star_mass)
-            self.systems[domain] = StarSystem(star=star)
+            self.systems[domain] = StarSystem(star=star, position=position)
         return self.systems[domain]
 
     def get_system(self, domain: str) -> Optional[StarSystem]:

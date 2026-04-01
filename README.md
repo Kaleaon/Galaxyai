@@ -43,3 +43,30 @@ pip install -e ".[dev]"
 pytest
 ```
 
+
+
+## New Capabilities (v0.2 scaffolding)
+
+- **External retrieval ingestion**
+  - `Galaxy.ingest_from_wikipedia(topic, domain=...)`
+  - `Galaxy.ingest_from_url(url, domain=...)`
+- **Evidence-aware ingest path** via `SourceEvidence`.
+- **Hyperlanes and wormholes** for long-distance domain traversal.
+- **3D galaxy map payload** via `Galaxy.galaxy_map_3d()` for rendering in Three.js/Plotly.
+
+### Example: Hyperlanes + Wormholes
+
+```python
+from gma import Galaxy
+
+g = Galaxy()
+g.register_domain("geography", position=(0.0, 0.0, 0.0))
+g.register_domain("astronomy", position=(10.0, 2.0, 1.0))
+g.register_domain("biology", position=(20.0, -2.0, 0.0))
+
+g.add_hyperlane("geography", "astronomy")
+g.add_wormhole("geography", "biology", distance_multiplier=0.05)
+
+print(g.shortest_domain_path("geography", "biology"))
+print(g.galaxy_map_3d())
+```

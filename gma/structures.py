@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 
 # ---------------------------------------------------------------------------
@@ -155,10 +155,11 @@ class StarSystem:
         system_id: Unique identifier.
     """
 
-    def __init__(self, star: Star) -> None:
+    def __init__(self, star: Star, position: Tuple[float, float, float] = (0.0, 0.0, 0.0)) -> None:
         self.star: Star = star
         self.planets: Dict[str, Planet] = {}
         self.system_id: str = str(uuid.uuid4())
+        self.position: Tuple[float, float, float] = position
 
     # ------------------------------------------------------------------
     # Public API

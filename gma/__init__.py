@@ -25,6 +25,8 @@ from gma.structures import Particle, Planet, Star, StarSystem, Filament, Galacti
 from gma.falsification import FalsificationSink, FalsificationState
 from gma.learning import AccretionEngine
 from gma.galaxy import Galaxy
+from gma.navigation import HyperlaneNetwork, SpaceLane
+from gma.retrieval import SourceEvidence, WikipediaRetriever, WebRetriever
 
 __all__ = [
     "Particle",
@@ -37,4 +39,9 @@ __all__ = [
     "FalsificationState",
     "AccretionEngine",
     "Galaxy",
+    "HyperlaneNetwork",
+    "SpaceLane",
+    "SourceEvidence",
+    "WikipediaRetriever",
+    "WebRetriever",
 ]
