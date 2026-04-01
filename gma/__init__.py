@@ -27,6 +27,7 @@ from gma.learning import AccretionEngine
 from gma.galaxy import Galaxy
 from gma.navigation import HyperlaneNetwork, SpaceLane
 from gma.retrieval import SourceEvidence, WikipediaRetriever, WebRetriever
+from gma.infrastructure.persistence import get_persistence_adapter
 
 __all__ = [
     "Particle",
@@ -44,4 +45,5 @@ __all__ = [
     "SourceEvidence",
     "WikipediaRetriever",
     "WebRetriever",
+    "get_persistence_adapter",
 ]
