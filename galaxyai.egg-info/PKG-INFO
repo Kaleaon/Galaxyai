@@ -1,3 +1,14 @@
+Metadata-Version: 2.4
+Name: galaxyai
+Version: 0.1.0
+Summary: Galactic Memory Architecture — a topological framework for continuous learning with structural stability.
+License: MIT
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: pytest-cov; extra == "dev"
+
 # Galaxyai
 
 A.I. network design inspired by galaxy structures.
