@@ -1,0 +1,195 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RETENTION_DAYS: 14
+
+jobs:
+  python-package:
+    name: Python wheel + sdist
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build wheel and sdist
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+
+      - name: Set artifact version label
+        id: version
+        run: |
+          if [[ "${GITHUB_REF}" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "label=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "label=sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload Python distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-dist-${{ steps.version.outputs.label }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: ${{ env.RETENTION_DAYS }}
+
+  backend-container:
+    name: Backend container image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check backend Dockerfile
+        id: backend_check
+        run: |
+          if [[ -f backend/Dockerfile ]]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Docker Buildx
+        if: steps.backend_check.outputs.present == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set image label
+        if: steps.backend_check.outputs.present == 'true'
+        id: backend_version
+        run: |
+          if [[ "${GITHUB_REF}" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "label=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "label=sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build backend image tarball
+        if: steps.backend_check.outputs.present == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          tags: galaxyai/backend:${{ steps.backend_version.outputs.label }}
+          outputs: type=docker,dest=/tmp/backend-image-${{ steps.backend_version.outputs.label }}.tar
+
+      - name: Upload backend image artifact
+        if: steps.backend_check.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-image-${{ steps.backend_version.outputs.label }}
+          path: /tmp/backend-image-${{ steps.backend_version.outputs.label }}.tar
+          if-no-files-found: error
+          retention-days: ${{ env.RETENTION_DAYS }}
+
+      - name: No backend Dockerfile found
+        if: steps.backend_check.outputs.present != 'true'
+        run: echo "Skipping backend image build (backend/Dockerfile not found)."
+
+  frontend-build:
+    name: Frontend static bundle or container
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect frontend build mode
+        id: frontend_check
+        run: |
+          if [[ -f frontend/Dockerfile ]]; then
+            echo "mode=container" >> "$GITHUB_OUTPUT"
+          elif [[ -f frontend/package.json ]]; then
+            echo "mode=static" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=none" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set frontend label
+        if: steps.frontend_check.outputs.mode != 'none'
+        id: frontend_version
+        run: |
+          if [[ "${GITHUB_REF}" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "label=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "label=sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Node.js
+        if: steps.frontend_check.outputs.mode == 'static'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend static bundle
+        if: steps.frontend_check.outputs.mode == 'static'
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+          if [[ -d dist ]]; then
+            tar -czf /tmp/frontend-static-${{ steps.frontend_version.outputs.label }}.tar.gz dist
+          elif [[ -d build ]]; then
+            tar -czf /tmp/frontend-static-${{ steps.frontend_version.outputs.label }}.tar.gz build
+          else
+            echo "No dist/ or build/ output directory found after npm run build" >&2
+            exit 1
+          fi
+
+      - name: Upload frontend static artifact
+        if: steps.frontend_check.outputs.mode == 'static'
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-static-${{ steps.frontend_version.outputs.label }}
+          path: /tmp/frontend-static-${{ steps.frontend_version.outputs.label }}.tar.gz
+          if-no-files-found: error
+          retention-days: ${{ env.RETENTION_DAYS }}
+
+      - name: Set up Docker Buildx
+        if: steps.frontend_check.outputs.mode == 'container'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build frontend image tarball
+        if: steps.frontend_check.outputs.mode == 'container'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          tags: galaxyai/frontend:${{ steps.frontend_version.outputs.label }}
+          outputs: type=docker,dest=/tmp/frontend-image-${{ steps.frontend_version.outputs.label }}.tar
+
+      - name: Upload frontend image artifact
+        if: steps.frontend_check.outputs.mode == 'container'
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-image-${{ steps.frontend_version.outputs.label }}
+          path: /tmp/frontend-image-${{ steps.frontend_version.outputs.label }}.tar
+          if-no-files-found: error
+          retention-days: ${{ env.RETENTION_DAYS }}
+
+      - name: No frontend sources found
+        if: steps.frontend_check.outputs.mode == 'none'
+        run: echo "Skipping frontend build (frontend/Dockerfile and frontend/package.json not found)."
