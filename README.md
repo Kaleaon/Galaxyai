@@ -14,6 +14,7 @@ Knowledge is organised like a galaxy:
 - **Falsification Sink** → black hole for false or superseded knowledge
 
 See [DESIGN.md](DESIGN.md) for the full architecture specification.
+See [ARCHITECTURE_EXPANSION_PLAN.md](ARCHITECTURE_EXPANSION_PLAN.md) for a pragmatic roadmap from prototype to production architecture.
 
 ## Quick Start
 
