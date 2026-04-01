@@ -11,6 +11,7 @@ requires-python = ">=3.10"
 license = { text = "MIT" }
 
 [project.optional-dependencies]
+backend = ["fastapi>=0.110,<1.0"]
 dev = ["pytest>=8.0", "pytest-cov"]
 
 [tool.pytest.ini_options]
